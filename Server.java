@@ -5,67 +5,112 @@ import java.util.concurrent.Semaphore;
 import java.text.SimpleDateFormat;
 
 public class Server {
-    static int n_jogadores = 2; // Altere para quantos quiser
+
+    // Pirncipais informações do jogo
+    static int n_jogadores = 2;
     static int n_rodadas = 2;
+    static String[] categorias = { "Nome", "CEP", "Animal", "Objeto" };
     static List<Handler> jogadores = new ArrayList<>();
-    static Semaphore semaforo = new Semaphore(1); // Protege a lista/envios
+
+    // Controla o envio de mensagens, só um jogador pode mandar mensagem por vez
+    static Semaphore semaforo = new Semaphore(1);
 
     public static void main(String[] args) throws Exception {
         ServerSocket server = new ServerSocket(9002);
-        System.out.println("Aguardando jogadores...");
 
-        // 1. Conexão: Espera todos os nomes antes de começar
+        // Espera até todos os jogadores entrarem
         while (jogadores.size() < n_jogadores) {
             Socket s = server.accept();
             Handler h = new Handler(s);
             h.start();
-            while (h.nome == null) { Thread.sleep(100); } // Trava até o nome chegar
+            while (h.nome == null) {
+                Thread.sleep(100);
+            }
             jogadores.add(h);
-            System.out.println(h.nome + " entrou!");
+            System.out.println(h.nome + " entrou");
         }
 
-        // 2. Rodadas
+        // for que controla as rodadas
         for (int r = 1; r <= n_rodadas; r++) {
-            String letra = String.valueOf((char) ('A' + new Random().nextInt(26)));
-            enviarParaTodos("\n--- RODADA " + r + " | LETRA: " + letra + " ---");
 
-            // Espera todos enviarem a resposta
+            // Sorteia uma letra
+            String letra = String.valueOf((char) ('A' + new Random().nextInt(26)));
+            enviarParaTodos("\nRodada " + r + " | Letra: " + letra);
+            enviarParaTodos("Categorias: " + String.join(", ", categorias));
+
+            // Espera até todos os jogadores responderem
             while (true) {
                 int prontos = 0;
-                for (Handler h : jogadores) if (h.resposta != null) prontos++;
-                if (prontos == n_jogadores) break;
+                for (Handler h : jogadores)
+                    if (h.resposta != null)
+                        prontos++;
+                if (prontos == n_jogadores)
+                    break;
                 Thread.sleep(500);
             }
 
+            // Calcula os pontos e limpa as respostas para a próxima rodada
             processarRodada();
-            for (Handler h : jogadores) h.resposta = null; // Reseta para a próxima
+            for (Handler h : jogadores)
+                h.resposta = null;
         }
-        enviarParaTodos("FIM DE JOGO!");
+        enviarPlacarFinal();
     }
 
+    // Esse método envia uma mensagem para todos os jogadores
     static void enviarParaTodos(String msg) throws Exception {
-        semaforo.acquire(); // Usa semáforo para garantir que ninguém interrompa o envio
+        semaforo.acquire(); // Bloqueia o semáforo
+
+        // Envia para todos os jogadores
         for (Handler h : jogadores) {
             h.out.write((msg + "\n").getBytes());
         }
-        semaforo.release();
+        semaforo.release(); // Abre o semáforo de novo
     }
 
+    // Calcula a pontuação de cada jogador
     static void processarRodada() throws Exception {
         String hora = new SimpleDateFormat("HH:mm:ss").format(new Date());
+
+        // Conta os pontos de um jogador por vez
         for (Handler h : jogadores) {
-            // Regra de pontos: 3 se for único, 1 se for repetido
-            int pontosNestaRodada = 3;
-            for (Handler outro : jogadores) {
-                if (outro != h && h.resposta.equalsIgnoreCase(outro.resposta)) {
-                    pontosNestaRodada = 1;
+            String[] respostasCli = h.resposta.split(",");
+            int pontosDaRodada = 0;
+
+            System.out.println("[" + hora + "] " + h.nome + " (" + h.ip + ") enviou: " + h.resposta);
+
+            // Percorre as categorias e compara a resposta do jogador com as dos outros
+            // jogadores
+            for (int i = 0; i < categorias.length; i++) {
+                if (i < respostasCli.length) {
+                    String respAtual = respostasCli[i].trim();
+                    int pts = 3;
+
+                    // Compara a resposta com as dos outros jogadores
+                    for (Handler outro : jogadores) {
+                        if (outro != h && outro.resposta != null) {
+                            String[] respOutro = outro.resposta.split(",");
+
+                            // Se algum jogador escreveu e mesma coisa, o ponto fica 1
+                            if (i < respOutro.length && respAtual.equalsIgnoreCase(respOutro[i].trim())) {
+                                pts = 1;
+                            }
+                        }
+                    }
+                    pontosDaRodada += pts;
                 }
             }
-            h.pontos += pontosNestaRodada;
-            
-            // Aqui o servidor apresenta os dados: NOME, IP e HORA
-            enviarParaTodos("[" + hora + "] " + h.nome + " (" + h.ip + ") enviou: " + h.resposta);
+            h.pontos += pontosDaRodada;
+            enviarParaTodos(h.nome + " fez " + pontosDaRodada + " pontos nesta rodada.");
         }
+    }
+
+    // Monta o placar final e mostra pros jogadores
+    static void enviarPlacarFinal() throws Exception {
+        String placar = "\nPlacar final:\n";
+        for (Handler h : jogadores)
+            placar += h.nome + ": " + h.pontos + " pts\n";
+        enviarParaTodos(placar);
     }
 }
 
@@ -77,7 +122,7 @@ class Handler extends Thread {
 
     public Handler(Socket s) {
         this.s = s;
-        this.ip = s.getInetAddress().getHostAddress(); // O servidor pega o IP aqui
+        this.ip = s.getInetAddress().getHostAddress();
     }
 
     public void run() {
@@ -85,15 +130,12 @@ class Handler extends Thread {
             InputStream in = s.getInputStream();
             this.out = s.getOutputStream();
             byte[] buf = new byte[1024];
-            
-            // Primeira leitura é sempre o nome
             int n = in.read(buf);
             this.nome = new String(buf, 0, n);
-
-            // Leituras seguintes são as respostas do jogo
             while ((n = in.read(buf)) != -1) {
                 this.resposta = new String(buf, 0, n);
             }
-        } catch (Exception e) {}
+        } catch (Exception e) {
+        }
     }
 }
