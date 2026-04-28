@@ -21,9 +21,10 @@ public class Server {
         // Espera até todos os jogadores entrarem
         while (jogadores.size() < n_jogadores) {
             Socket s = server.accept();
-            Handler h = new Handler(s);
+            Handler h = new Handler(s); // Cria um objeto Handler, que via ser responsável por cuidar daquele jogador
             h.start();
-            while (h.nome == null) {
+            
+            while (h.nome == null) { // Espera os jogadores colocarem o nome pra iniciar o jogo
                 Thread.sleep(100);
             }
             jogadores.add(h);
@@ -34,17 +35,17 @@ public class Server {
         for (int r = 1; r <= n_rodadas; r++) {
 
             // Sorteia uma letra
-            String letra = String.valueOf((char) ('A' + new Random().nextInt(26)));
+            String letra = String.valueOf((char) ('A' + new Random().nextInt(26))); // Sorteia uma letra
             enviarParaTodos("\nRodada " + r + " | Letra: " + letra);
             enviarParaTodos("Categorias: " + String.join(", ", categorias));
 
             // Espera até todos os jogadores responderem
             while (true) {
                 int prontos = 0;
-                for (Handler h : jogadores)
+                for (Handler h : jogadores) // Percorre a resposta dos jogadores
                     if (h.resposta != null)
                         prontos++;
-                if (prontos == n_jogadores)
+                if (prontos == n_jogadores) // Se o nùmero de respostar for igual o número de jogadores, significa que todos responderam e o loop encerra
                     break;
                 Thread.sleep(500);
             }
@@ -83,7 +84,7 @@ public class Server {
             // jogadores
             for (int i = 0; i < categorias.length; i++) {
                 if (i < respostasCli.length) {
-                    String respAtual = respostasCli[i].trim();
+                    String respAtual = respostasCli[i].trim(); // (.trim() remove espaços antes e depois)
                     int pts = 3;
 
                     // Compara a resposta com as dos outros jogadores
