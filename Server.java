@@ -21,7 +21,7 @@ public class Server {
         // Espera até todos os jogadores entrarem
         while (jogadores.size() < n_jogadores) {
             Socket s = server.accept();
-            Handler h = new Handler(s); // Cria um objeto Handler, que via ser responsável por cuidar daquele jogador
+            Handler h = new Handler(s); // Cria um objeto Handler, que vai ser responsável por cuidar daquele jogador
             h.start();
             
             while (h.nome == null) { // Espera os jogadores colocarem o nome pra iniciar o jogo
@@ -35,17 +35,17 @@ public class Server {
         for (int r = 1; r <= n_rodadas; r++) {
 
             // Sorteia uma letra
-            String letra = String.valueOf((char) ('A' + new Random().nextInt(26))); // Sorteia uma letra
+            String letra = String.valueOf((char) ('A' + new Random().nextInt(26)));
             enviarParaTodos("\nRodada " + r + " | Letra: " + letra);
             enviarParaTodos("Categorias: " + String.join(", ", categorias));
 
             // Espera até todos os jogadores responderem
             while (true) {
                 int prontos = 0;
-                for (Handler h : jogadores) // Percorre a resposta dos jogadores
+                for (Handler h : jogadores) 
                     if (h.resposta != null)
                         prontos++;
-                if (prontos == n_jogadores) // Se o nùmero de respostar for igual o número de jogadores, significa que todos responderam e o loop encerra
+                if (prontos == n_jogadores)
                     break;
                 Thread.sleep(500);
             }
@@ -84,15 +84,14 @@ public class Server {
             // jogadores
             for (int i = 0; i < categorias.length; i++) {
                 if (i < respostasCli.length) {
-                    String respAtual = respostasCli[i].trim(); // (.trim() remove espaços antes e depois)
+                    String respAtual = respostasCli[i].trim();
                     int pts = 3;
 
                     // Compara a resposta com as dos outros jogadores
                     for (Handler outro : jogadores) {
                         if (outro != h && outro.resposta != null) {
                             String[] respOutro = outro.resposta.split(",");
-
-                            // Se algum jogador escreveu e mesma coisa, o ponto fica 1
+                            
                             if (i < respOutro.length && respAtual.equalsIgnoreCase(respOutro[i].trim())) {
                                 pts = 1;
                             }
